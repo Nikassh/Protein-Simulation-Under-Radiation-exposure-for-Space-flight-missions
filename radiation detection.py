@@ -32,8 +32,9 @@ data = pd.read_excel(r"C:\Users\Nikassh\AppData\Local\Programs\Python\Python313\
 
 # Extract total absorbed doses (convert mGy to Gy)
 doses_mgy = data["Total Absorbed Dose (Experiment)"].dropna().tolist()
-doses_gy = [dose / 1000 for dose in doses_mgy]  # Convert mGy to Gy
-print(f"Extracted doses (Gy): {doses_gy}")
+print(f"Raw doses (mGy) as strings: {doses_mgy}")
+doses_gy = [float(re.search(r'\d+\.?\d*', str(dose)).group()) / 1000 for dose in doses_mgy if re.search(r'\d+\.?\d*', str(dose))]
+print(f"Converted doses (Gy): {doses_gy}")
 
 # Estimate damages based on low-dose effects
 num_samples = max(len(doses_gy), 5)
@@ -54,3 +55,83 @@ df = pd.DataFrame(data)
 df.to_csv("radiation_dataset.csv", index=False)
 print("\nUpdated dataset saved to radiation_dataset.csv:")
 print(df)
+
+
+#AI training
+
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
+import matplotlib.pyplot as plt
+import re
+    
+
+# Load the Excel file
+file_path = r"C:\Users\Nikassh\AppData\Local\Programs\Python\Python313\osdr-environmental-data-rr-radiation-data-5-5-23.xlsx"
+df = pd.read_excel(file_path)
+print("Excel data preview:\n", df.head())
+
+# Extract and convert doses (mGy to Gy)
+doses_mgy = df["Total Absorbed Dose (Experiment)"].dropna().tolist()
+doses_gy = [float(re.search(r'\d+\.?\d*', str(dose)).group()) / 1000 for dose in doses_mgy if re.search(r'\d+\.?\d*', str(dose))]
+print(f"Converted doses (Gy): {doses_gy}")
+
+# Create placeholder damages (cyclic 5–25% for now)
+num_samples = len(doses_gy)
+damages = [5 + min((d * 10 / max(doses_gy)), 10) for d in doses_gy]
+print(f"Estimated damages (%): {damages[:num_samples]}")
+
+# Features (Dose) and Target (Damage)
+X = np.array(doses_gy).reshape(-1, 1)  # 2D array for scikit-learn
+y = np.array(damages[:num_samples])
+
+# Split data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Initialize and train the model
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+new_dose = np.array([[0.03]])
+predicted_damage = model.predict(new_dose)
+print(f"Predicted damage for 0.03 Gy: {predicted_damage[0]}%")
+
+
+# Predict on test set
+y_pred = model.predict(X_test)
+
+# Evaluate
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+print(f"Mean Squared Error: {mse}")
+print(f"R-squared Score: {r2}")
+print(f"Model Coefficients: {model.coef_}, Intercept: {model.intercept_}")
+
+# Visualize
+plt.scatter(X_train, y_train, color='blue', label='Training data')
+plt.plot(X_test, y_pred, color='red', label='Regression line')
+plt.xlabel("Dose (Gy)")
+plt.ylabel("Damage (%)")
+plt.title("Radiation Dose vs. Protein Damage (Excel Data)")
+plt.legend()
+plt.show()
+
+# Test with a new dose
+new_dose = np.array([[0.03]])
+predicted_damage = model.predict(new_dose)
+print(f"Predicted damage for 0.03 Gy: {predicted_damage[0]}%")
+
+
+
+
+
+
+
+
+
+
+
+
+
